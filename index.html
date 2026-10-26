@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>등급으로 별의 거리 찾기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: 관측 창(밤하늘, 별마다 목표 겉보기 등급 표시) → 조작 버튼 → 거리 기록표 → 등급 수직선 → 탐구 질문. 하늘은 항상 밤. */
+:root{
+  --bg:#eef1f6; --surface:#ffffff; --ink:#18213a; --muted:#5b6582; --line:#d4d9e6;
+  --accent:#e0703a; --accent-ink:#ffffff; --tenpc:#f2c14e; --a:#3f7fe0; --b:#c9902a; --c:#d9622b; --ok:#2f9e6a;
+  --font-display:"Gowun Batang", "Noto Serif KR", serif;
+  --font-body:"Noto Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", sans-serif;
+  --font-num:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d1222; --surface:#161d33; --ink:#e8ecf7; --muted:#9aa5c4; --line:#2a3454;
+  --accent:#f08a52; --accent-ink:#1a1006; --tenpc:#f5cd6a; --a:#7aa8ff; --b:#f2c45e; --c:#ff9a64; --ok:#5fd39a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d1222; --surface:#161d33; --ink:#e8ecf7; --muted:#9aa5c4; --line:#2a3454;
+  --accent:#f08a52; --accent-ink:#1a1006; --tenpc:#f5cd6a; --a:#7aa8ff; --b:#f2c45e; --c:#ff9a64; --ok:#5fd39a; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.6}
+.wrap{max-width:1040px;margin:0 auto;padding-block:20px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:16px}
+header h1{font-family:var(--font-display);font-size:clamp(1.6rem,4vw,2.2rem);margin:0;line-height:1.25;text-wrap:balance}
+header p{margin:6px 0 0;color:var(--muted);max-width:66ch}
+.tag{font-family:var(--font-num);font-size:.8rem;font-weight:700;letter-spacing:.06em;color:#fff;border-radius:6px;padding:3px 8px;white-space:nowrap}
+.tag.A{background:var(--a)} .tag.B{background:var(--b)} .tag.C{background:var(--c)}
+.sky{border-radius:14px;overflow:hidden;background:#081028;box-shadow:0 10px 30px -18px rgba(8,16,40,.7)}
+#sky{display:block;width:100%;height:480px;touch-action:none;cursor:grab}
+.hint{font-size:.85rem;color:var(--muted);margin:-6px 0 0}
+.controls{display:flex;flex-wrap:wrap;gap:10px}
+button{font:inherit;font-weight:700;border-radius:10px;padding:11px 18px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;min-height:46px}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+button.green{background:var(--ok);border-color:var(--ok);color:#fff}
+button.small{padding:8px 14px;min-height:42px}
+button:disabled{opacity:.5;cursor:default}
+button:focus-visible,input:focus-visible{outline:3px solid var(--tenpc);outline-offset:2px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}
+.panel h2{font-family:var(--font-display);font-size:1.2rem;margin:0 0 4px}
+.panel .sub{color:var(--muted);font-size:.88rem;margin:0 0 10px}
+.table-box{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:720px;font-size:.95rem}
+th{font-size:.8rem;font-weight:700;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:2px solid var(--line);white-space:nowrap}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle}
+td.num{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:1.15rem;font-weight:700;white-space:nowrap}
+td.now{color:var(--ok)}
+.dist{display:flex;align-items:center;gap:6px}
+.dist input{font:inherit;font-family:var(--font-num);font-size:1.1rem;font-weight:700;width:6.5em;padding:8px 10px;border-radius:8px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink)}
+.res{font-size:.88rem;line-height:1.5;min-width:220px}
+.res b{color:var(--accent)}
+.res.good b{color:var(--ok)}
+.scale-box{overflow-x:auto}
+#scale{display:block;width:100%;min-width:520px;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.85rem;color:var(--muted)}
+.q{margin:0;padding-left:1.3em}
+.q li{margin:4px 0}
+.note{font-size:.8rem;color:var(--muted);margin:8px 0 0}
+.scope-panel{display:flex;flex-wrap:wrap;gap:20px;align-items:center}
+.scope-wrap{flex:0 0 auto;width:min(100%,340px);aspect-ratio:1;max-width:100%}
+#scope{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+.scope-msg{min-height:3.2em;margin:10px 0;font-size:.92rem}
+.scope-msg b{color:var(--accent)}
+.rec-h{font-size:.85rem;color:var(--muted);margin:0 0 6px;font-weight:700}
+.pending{color:var(--muted);font-weight:500;font-size:.9rem;font-family:var(--font-body)}
+.scope-text{flex:1 1 260px;min-width:0}
+.scope-list{list-style:none;margin:0 0 10px;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+.scope-list li{display:flex;align-items:center;gap:8px;background:var(--bg);border-radius:8px;padding:6px 12px;font-family:var(--font-num);font-weight:700;font-size:1.1rem}
+</style>
+<style>html{color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>등급으로 별의 거리 찾기</h1>
+    <p>먼저 <b>망원경</b>으로 별 A, B, C를 관측해 각 별의 <b>겉보기 등급</b>을 측정하세요. 아래 그림에서 세 별은 모두 <b>10 pc</b>에서 출발하므로, 처음 보이는 밝기가 곧 <b>절대 등급</b>입니다. 별을 끌어서 지금 등급이 측정한 겉보기 등급과 같아지는 곳을 찾고, 그때의 거리를 기록해 보세요.</p>
+  </header>
+
+  <section class="panel scope-panel">
+    <div class="scope-wrap"><canvas id="scope" aria-label="망원경 시야. 별을 눌러 조준하고 측광해 겉보기 등급을 측정"></canvas></div>
+    <div class="scope-text">
+      <h2>망원경 관측</h2>
+      <p class="sub">시야에서 별을 누르면 망원경이 그 별로 돌아갑니다. 시야를 끌어서 직접 움직일 수도 있어요. 별이 가운데 <b>조준 원</b> 안에 들어오면 자동으로 빛을 모아 겉보기 등급을 측정하고 기록합니다.</p>
+      <p class="scope-msg" id="scopeMsg"></p>
+      <h3 class="rec-h">관측 기록</h3>
+      <ul class="scope-list" id="scopeList"></ul>
+    </div>
+  </section>
+
+  <div class="sky"><canvas id="sky" aria-label="지구와 세 별이 있는 밤하늘. 별을 끌어 거리를 바꿀 수 있음"></canvas></div>
+  <p class="hint">별 아래에는 지금 위치에서의 등급과 거리가 표시됩니다. 등급이 망원경으로 측정한 겉보기 등급과 같아지면 초록색으로 바뀌어요. 그때의 거리가 별의 실제 거리입니다.</p>
+
+  <div class="controls">
+    <button class="primary" id="btnTen">세 별을 10 pc로 되돌리기</button>
+    <button id="btnNew">새 별 세트 만들기</button>
+  </div>
+
+  <section class="panel" hidden>
+    <h2>거리 기록표</h2>
+    <p class="sub">별의 지금 등급이 겉보기 등급과 같아지면, 그림의 거리축을 읽어 찾은 거리를 적고 <b>확인</b>을 누르세요.</p>
+    <div class="table-box">
+      <table>
+        <thead><tr><th>별</th><th>절대 등급 M</th><th>지금 등급</th><th>찾은 거리</th><th></th><th>결과</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel" hidden>
+    <h2>등급 수직선</h2>
+    <p class="sub">등급은 숫자가 작을수록 밝습니다. 1등급 차이는 약 2.5배 밝기 차이예요.</p>
+    <div class="legend"><span>○ 겉보기 등급 m (지구에서)</span><span>● 절대 등급 M (10 pc에서)</span><span>◆ 지금 위치에서의 등급</span></div>
+    <div class="scale-box"><svg id="scale" viewBox="0 0 900 214" role="img" aria-label="세 별의 등급 비교 수직선"></svg></div>
+  </section>
+
+  <section class="panel" hidden>
+    <h2>탐구 질문</h2>
+    <ol class="q">
+      <li>세 별의 겉보기 등급과 절대 등급을 비교해 보세요. 각각 m과 M 중 어느 쪽이 더 작나요?</li>
+      <li>별 A, B, C는 각각 10 pc보다 가까운가요, 10 pc에 있나요, 10 pc보다 먼가요?</li>
+      <li>겉보기 등급이 절대 등급보다 작은 별은 어느 쪽으로 옮겨야 실제 위치를 찾을 수 있었나요? 그 이유는 무엇일까요?</li>
+      <li>겉보기 등급과 절대 등급의 차이(m − M)와 찾은 거리 사이에는 어떤 관계가 있을까요?</li>
+    </ol>
+    <p class="note">세 별은 수업용으로 만든 가상의 별입니다. 거리는 로그 눈금이라 1, 10, 100 pc 사이 간격이 같아요. 계산식: m − M = 5 log(d / 10)</p>
+  </section>
+</div>
+
+<script>
+const LMIN=-0.5,LMAX=3.3,SLOTS=['A','B','C'],TOL_MAG=0.2,TOL_D=0.15;
+const TAGCOL={A:'#7aa8ff',B:'#f2c45e',C:'#ff9a64'};
+const STARCOL={A:[200,220,255],B:[255,236,180],C:[255,180,130]};
+const state={};
+const $=id=>document.getElementById(id);
+const f1=v=>(Math.abs(v)<0.05?'+0.0':(v>0?'+':'')+v.toFixed(1));
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const curM=s=>state[s].M+5*(state[s].logd-1);
+const realLogd=s=>1+(state[s].m-state[s].M)/5;
+const realD=s=>Math.pow(10,realLogd(s));
+const fmtPc=d=>d<10?d.toFixed(1):Math.round(d);
+
+/* A: m < M (가까움), B: m = M (10 pc), C: m > M (멂) */
+const DEFAULT={A:{m:1.5,M:3.0},B:{m:1.0,M:1.0},C:{m:5.0,M:0.0}};
+function setStars(set){
+  for(const s of SLOTS){state[s]={m:set[s].m,M:set[s].M,logd:1,solved:false,shown:false};}
+}
+function randomSet(){
+  const r=Math.random,rd=v=>Math.round(v*10)/10;
+  const MA=rd(1+r()*4), dA=rd(-(1+r()*3.5));      // 약 2~6 pc
+  const MB=rd(-2+r()*5);
+  const MC=rd(-3+r()*4), dC=rd(1.5+r()*5);        // 약 20~200 pc
+  return {A:{m:rd(MA+dA),M:MA},B:{m:MB,M:MB},C:{m:rd(MC+dC),M:MC}};
+}
+
+/* ---------- 거리 기록표 ---------- */
+$('rows').innerHTML=SLOTS.map(s=>`<tr>
+  <td><span class="tag ${s}">별 ${s}</span></td>
+  <td class="num" id="M${s}"></td><td class="num now" id="now${s}"></td>
+  <td><div class="dist"><input type="number" inputmode="decimal" step="any" min="0" id="d${s}" aria-label="별 ${s}의 찾은 거리"><span>pc</span></div></td>
+  <td><div class="dist"><button class="green small" id="chk${s}">확인</button><button class="small" id="show${s}">정답</button></div></td>
+  <td class="res" id="res${s}">별을 옮겨 보세요.</td></tr>`).join('');
+function fillTable(){
+  resetScope();
+  for(const s of SLOTS){$('M'+s).textContent=f1(state[s].M);
+    $('d'+s).value='';$('res'+s).className='res';$('res'+s).textContent='별을 옮겨 보세요.';
+    $('chk'+s).disabled=false;$('show'+s).disabled=false;}
+}
+function moveHint(s){
+  const now=curM(s),m=state[s].m;
+  return now<m?`지금 등급(${f1(now)})이 망원경에서 본 겉보기 등급(${f1(m)})보다 작아요. 실제보다 <b>더 밝게</b> 보이니 별을 <b>더 멀리</b> 옮겨 보세요.`
+              :`지금 등급(${f1(now)})이 망원경에서 본 겉보기 등급(${f1(m)})보다 커요. 실제보다 <b>더 어둡게</b> 보이니 별을 <b>더 가까이</b> 옮겨 보세요.`;
+}
+function check(s){
+  const st=state[s],res=$('res'+s),typed=parseFloat($('d'+s).value),d=realD(s);
+  const atTarget=Math.abs(curM(s)-st.m)<=TOL_MAG;
+  if(!atTarget){res.className='res';res.innerHTML=moveHint(s);return;}
+  if(!(typed>0)){res.className='res';res.innerHTML='위치를 잘 찾았어요! 이제 거리축을 읽어 <b>찾은 거리</b>를 적어 주세요.';return;}
+  if(Math.abs(typed-d)/d<=TOL_D){
+    st.solved=true;res.className='res good';
+    res.innerHTML=`<b>정답!</b> 별 ${s}는 약 ${fmtPc(d)} pc에 있어요. ${s==='A'?'10 pc보다 가까운':s==='B'?'10 pc에 있는':'10 pc보다 먼'} 별입니다.`;
+    $('chk'+s).disabled=true;update();
+  }else{res.className='res';
+    res.innerHTML=`위치는 맞아요. 적은 거리(${typed} pc)를 다시 확인해 보세요. 거리축은 <b>로그 눈금</b>이라 1·10·100 pc 사이 작은 눈금이 2, 3, …, 9를 뜻해요.`;}
+}
+function showAnswer(s){
+  const st=state[s];st.shown=true;st.solved=true;
+  $('res'+s).className='res good';
+  $('res'+s).innerHTML=`<b>정답 위치</b>를 표시했어요. 별 ${s}는 약 ${fmtPc(realD(s))} pc에 있어요.`;
+  $('chk'+s).disabled=true;$('show'+s).disabled=true;
+  animate({[s]:realLogd(s)});
+}
+for(const s of SLOTS){$('chk'+s).addEventListener('click',()=>check(s));$('show'+s).addEventListener('click',()=>showAnswer(s));
+  $('d'+s).addEventListener('keydown',e=>{if(e.key==='Enter')check(s);});}
+
+/* ---------- sky canvas ---------- */
+const cv=$('sky'),cx=cv.getContext('2d');
+let W=0,H=0,bgStars=[];
+function seed(n){let x=n;return()=>((x=(x*16807)%2147483647)/2147483647);}
+function resize(){
+  const r=cv.getBoundingClientRect(),dpr=Math.min(2,devicePixelRatio||1);
+  W=r.width;H=r.height;cv.width=W*dpr;cv.height=H*dpr;cx.setTransform(dpr,0,0,dpr,0,0);
+  const rnd=seed(7);bgStars=Array.from({length:Math.round(W*H/2200)},()=>[rnd()*W,rnd()*H,rnd()*1.1+.2,rnd()*.5+.15]);
+  draw();
+}
+new ResizeObserver(resize).observe(cv);
+function geom(){const ex=Math.min(70,W*.1);return{ex,x0:ex+34,x1:W-28,ay:H-30};}
+function xOf(logd,g){const t=(Math.max(LMIN,Math.min(LMAX,logd))-LMIN)/(LMAX-LMIN);return g.x0+t*(g.x1-g.x0);}
+function laneY(s){return (H-40)*{A:.19,B:.47,C:.75}[s]+6;}
+function glow(x,y,m,col){
+  const mv=Math.max(-9,Math.min(7,m));
+  const r=5+3*(7-mv), a=Math.max(.25,Math.min(1,.45+(7-mv)*.05));
+  const [R,G,B]=col;
+  const g=cx.createRadialGradient(x,y,0,x,y,r);
+  g.addColorStop(0,`rgba(255,255,255,${a})`);g.addColorStop(.18,`rgba(${R},${G},${B},${a})`);
+  g.addColorStop(.5,`rgba(${R},${G},${B},${a*.28})`);g.addColorStop(1,`rgba(${R},${G},${B},0)`);
+  cx.fillStyle=g;cx.beginPath();cx.arc(x,y,r,0,7);cx.fill();
+  cx.fillStyle='#fff';cx.beginPath();cx.arc(x,y,Math.max(1.6,r*.09),0,7);cx.fill();
+}
+function label(text,x,y,font,color,align){
+  cx.font=font;cx.textAlign=align||'center';
+  cx.lineWidth=4;cx.strokeStyle='rgba(6,12,32,.85)';cx.lineJoin='round';cx.strokeText(text,x,y);
+  cx.fillStyle=color;cx.fillText(text,x,y);
+}
+function draw(){
+  if(!W)return;const g=geom();
+  const bg=cx.createLinearGradient(0,0,W,H);bg.addColorStop(0,'#0a1638');bg.addColorStop(1,'#050916');
+  cx.fillStyle=bg;cx.fillRect(0,0,W,H);
+  for(const[x,y,r,a]of bgStars){cx.fillStyle=`rgba(220,230,255,${a})`;cx.fillRect(x,y,r,r);}
+  // earth
+  const ey=(H-40)/2,er=Math.min(46,H*.12);
+  const eg=cx.createRadialGradient(g.ex-er*.8,ey-er*.4,er*.2,g.ex-er*.5,ey,er*1.2);
+  eg.addColorStop(0,'#8fd3ff');eg.addColorStop(.6,'#3a8fd0');eg.addColorStop(1,'#1d4d86');
+  cx.fillStyle=eg;cx.beginPath();cx.arc(g.ex-er*.55,ey,er,0,7);cx.fill();
+  cx.fillStyle='#7cc46a';cx.beginPath();cx.ellipse(g.ex-er*.4,ey-er*.25,er*.35,er*.22,.5,0,7);cx.fill();
+  label('지구',g.ex-er*.55,ey+er+18,'700 13px "Noto Sans KR",sans-serif','#e8eeff');
+  // axis with ticks
+  const ay=g.ay;cx.strokeStyle='rgba(200,215,255,.4)';cx.lineWidth=1;
+  cx.beginPath();cx.moveTo(g.x0,ay);cx.lineTo(g.x1,ay);cx.stroke();
+  for(let L=0;L<3;L++)for(let k=2;k<10;k++){const x=xOf(L+Math.log10(k),g);cx.beginPath();cx.moveTo(x,ay-3);cx.lineTo(x,ay+3);cx.stroke();
+    cx.strokeStyle='rgba(200,215,255,.06)';cx.beginPath();cx.moveTo(x,10);cx.lineTo(x,ay);cx.stroke();cx.strokeStyle='rgba(200,215,255,.4)';}
+  for(let L=0;L<=3;L++){const x=xOf(L,g);
+    cx.strokeStyle='rgba(200,215,255,.16)';cx.beginPath();cx.moveTo(x,10);cx.lineTo(x,ay);cx.stroke();
+    cx.strokeStyle='rgba(200,215,255,.5)';cx.beginPath();cx.moveTo(x,ay-6);cx.lineTo(x,ay+6);cx.stroke();
+    if(L!==1)label(Math.pow(10,L)+' pc',x,ay+20,'500 12px "IBM Plex Mono",monospace','rgba(210,222,255,.85)');}
+  label('거리 (로그 눈금) →',g.x1,ay-9,'500 11px "Noto Sans KR",sans-serif','rgba(200,215,255,.6)','right');
+  // 10 pc line
+  const tx=xOf(1,g);cx.strokeStyle='rgba(245,205,106,.85)';cx.setLineDash([6,6]);cx.lineWidth=1.6;
+  cx.beginPath();cx.moveTo(tx,10);cx.lineTo(tx,ay);cx.stroke();cx.setLineDash([]);
+  label('10 pc',tx,ay+20,'700 13px "IBM Plex Mono",monospace','#f5cd6a');
+  // tracks and stars
+  const P={};
+  for(const s of SLOTS){
+    const st=state[s],y=laneY(s),x=xOf(st.logd,g);P[s]={x,y};
+    cx.strokeStyle='rgba(200,215,255,.14)';cx.lineWidth=1;cx.beginPath();cx.moveTo(g.x0-20,y);cx.lineTo(g.x1,y);cx.stroke();
+    if(st.solved){const rx=xOf(realLogd(s),g);cx.strokeStyle='#5fd39a';cx.lineWidth=2.5;cx.beginPath();cx.arc(rx,y,12,0,7);cx.stroke();}
+    cx.strokeStyle=TAGCOL[s];cx.globalAlpha=.35;cx.lineWidth=1;cx.setLineDash([2,4]);
+    cx.beginPath();cx.moveTo(x,y);cx.lineTo(x,ay);cx.stroke();cx.setLineDash([]);cx.globalAlpha=1;
+    cx.fillStyle=TAGCOL[s];cx.beginPath();cx.moveTo(x,ay-1);cx.lineTo(x-5,ay-9);cx.lineTo(x+5,ay-9);cx.closePath();cx.fill();
+    glow(x,y,curM(s),STARCOL[s]);
+  }
+  // labels on top
+  for(const s of SLOTS){
+    const st=state[s],{x,y}=P[s],now=curM(s);
+    const lx=Math.max(90,Math.min(W-90,x));
+    const match=Math.abs(now-st.m)<=TOL_MAG;
+    label('별 '+s,lx,y-24,'700 15px "Noto Sans KR",sans-serif',TAGCOL[s]);
+    label((match?'✓ ':'')+'지금 '+f1(now)+' 등급',lx,y+34,'700 13px "IBM Plex Mono",monospace',match?'#5fd39a':TAGCOL[s]);
+    const dNow=Math.pow(10,st.logd);
+    label('거리 '+(dNow<10?dNow.toFixed(1):Math.round(dNow))+' pc',lx,y+52,'500 12px "IBM Plex Mono",monospace','#d6e0ff');
+  }
+}
+
+/* ---------- magnitude scale ---------- */
+const SV=$('scale');
+function scaleSvg(){
+  const MN=-6,MX=10,X0=50,X1=870,xm=v=>X0+(Math.max(MN,Math.min(MX,v))-MN)/(MX-MN)*(X1-X0);
+  let h=`<line x1="${X0}" y1="40" x2="${X1}" y2="40" stroke="var(--line)" stroke-width="2"/>`;
+  for(let v=MN;v<=MX;v+=2){h+=`<line x1="${xm(v)}" y1="34" x2="${xm(v)}" y2="46" stroke="var(--muted)"/>
+    <text x="${xm(v)}" y="24" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="13" fill="var(--muted)">${v>0?'+'+v:v}</text>`;}
+  h+=`<text x="${X0}" y="64" font-size="13" fill="var(--muted)" font-family="Noto Sans KR,sans-serif">← 밝다</text>
+      <text x="${X1}" y="64" text-anchor="end" font-size="13" fill="var(--muted)" font-family="Noto Sans KR,sans-serif">어둡다 →</text>`;
+  const rows={A:96,B:140,C:184},CV={A:'var(--a)',B:'var(--b)',C:'var(--c)'};
+  for(const s of SLOTS){
+    const st=state[s],y=rows[s],c=CV[s],m=curM(s);
+    h+=`<line x1="${X0}" y1="${y}" x2="${X1}" y2="${y}" stroke="var(--line)" stroke-dasharray="2 5"/>
+      <text x="${X0-8}" y="${y+5}" text-anchor="end" font-family="IBM Plex Mono,monospace" font-size="13" font-weight="700" fill="${c}">${s}</text>`;
+    h+=`<line x1="${xm(st.M)}" y1="${y}" x2="${xm(m)}" y2="${y}" stroke="${c}" stroke-width="2" opacity=".5"/>`;
+    h+=`<circle cx="${xm(st.m)}" cy="${y}" r="9" fill="var(--surface)" stroke="${c}" stroke-width="2.5"/>`;
+    h+=`<circle cx="${xm(st.M)}" cy="${y}" r="6" fill="${c}"/>`;
+    h+=`<rect x="${xm(m)-6}" y="${y-6}" width="12" height="12" transform="rotate(45 ${xm(m)} ${y})" fill="var(--accent)" stroke="var(--surface)" stroke-width="1.5"/>`;
+  }
+  SV.innerHTML=h;
+}
+
+function update(){draw();for(const s of SLOTS)$('now'+s).textContent=f1(curM(s));}
+
+/* ---------- animation ---------- */
+let raf=0;
+function cancelAnim(){cancelAnimationFrame(raf);}
+function animate(targets){
+  cancelAnim();
+  const from={},to={};
+  for(const k in targets){from[k]=state[k].logd;to[k]=targets[k];}
+  if(reduce){for(const k in to)state[k].logd=to[k];update();return;}
+  const T=1400,t0=performance.now();
+  const step=now=>{const p=Math.min(1,(now-t0)/T),e=p<.5?4*p*p*p:1-Math.pow(-2*p+2,3)/2;
+    for(const k in to)state[k].logd=from[k]+(to[k]-from[k])*e;update();if(p<1)raf=requestAnimationFrame(step);};
+  raf=requestAnimationFrame(step);
+}
+$('btnTen').addEventListener('click',()=>animate({A:1,B:1,C:1}));
+$('btnNew').addEventListener('click',()=>{cancelAnim();setStars(randomSet());fillTable();update();});
+
+/* ---------- drag stars on canvas (snaps to 10 pc when close) ---------- */
+let drag=null;
+function hit(e){const y=e.clientY-cv.getBoundingClientRect().top;
+  return SLOTS.reduce((best,s)=>Math.abs(y-laneY(s))<Math.abs(y-laneY(best))?s:best,'A');}
+function moveTo(e){const r=cv.getBoundingClientRect(),g=geom(),x=e.clientX-r.left;
+  let L=Math.max(LMIN,Math.min(LMAX,LMIN+(x-g.x0)/(g.x1-g.x0)*(LMAX-LMIN)));
+  if(Math.abs(L-1)<0.03)L=1;
+  state[drag].logd=L;update();}
+cv.addEventListener('pointerdown',e=>{cancelAnim();drag=hit(e);cv.setPointerCapture(e.pointerId);moveTo(e);});
+cv.addEventListener('pointermove',e=>{if(drag)moveTo(e);});
+cv.addEventListener('pointerup',()=>drag=null);cv.addEventListener('pointercancel',()=>drag=null);
+
+/* ---------- 망원경 관측 (측광으로 겉보기 등급 측정) ---------- */
+const sc=$('scope'),sx=sc.getContext('2d');
+const FIELD=2.2;                                   // 하늘 영역 크기 (시야 1칸 = 접안렌즈 지름)
+const SPOS={A:[.86,.88],B:[1.33,1.0],C:[1.0,1.36]}; // 하늘 영역 안의 별 위치
+const AP=.085;                                     // 조준 원 반지름 (시야 대비)
+const TW={A:[5.3,8.9,.3],B:[4.1,7.7,2.1],C:[6.2,9.4,4.4]};
+let SW=0,scopeBg=[],aim={x:1.1,y:1.1},slew=null,meas=null,rec={},lastDone=null;
+{const rnd=seed(31);scopeBg=Array.from({length:420},()=>({x:rnd()*FIELD,y:rnd()*FIELD,r:rnd()*1.3+.5,a:rnd()*.45+.12,f:.8+rnd()*3,p:rnd()*6.28}));}
+function rr(x,y,w,h,r){sx.beginPath();sx.moveTo(x+r,y);sx.arcTo(x+w,y,x+w,y+h,r);sx.arcTo(x+w,y+h,x,y+h,r);sx.arcTo(x,y+h,x,y,r);sx.arcTo(x,y,x+w,y,r);sx.closePath();}
+function msg(t){$('scopeMsg').innerHTML=t;}
+function renderRec(){
+  $('scopeList').innerHTML=SLOTS.map(s=>`<li><span class="tag ${s}">별 ${s}</span>${rec[s]!=null?f1(rec[s])+' 등급':'<span class="pending">측정 전</span>'}</li>`).join('');
+}
+function resetScope(){rec={};meas=null;slew=null;lastDone=null;aim={x:1.1,y:1.1};renderRec();
+  msg('시야에서 별을 눌러 망원경을 돌려 보세요.');}
+const clampAim=()=>{aim.x=Math.max(.75,Math.min(1.45,aim.x));aim.y=Math.max(.75,Math.min(1.45,aim.y));};
+function inAperture(){let best=null,bd=1e9;
+  for(const s of SLOTS){const d=Math.hypot(SPOS[s][0]-aim.x,SPOS[s][1]-aim.y);if(d<AP&&d<bd){bd=d;best=s;}}return best;}
+function slewTo(s){
+  const to={x:SPOS[s][0],y:SPOS[s][1]};
+  if(reduce){aim=to;return;}
+  slew={from:{...aim},to,t0:performance.now(),dur:900};
+  msg(`별 ${s} 쪽으로 망원경을 돌리는 중…`);
+}
+function startMeasure(){
+  if(meas)return;
+  const s=inAperture();
+  if(!s){msg('조준 원 안에 별을 넣은 뒤 <b>측광하기</b>를 눌러 주세요.');return;}
+  meas={s,t0:performance.now(),dur:2000,read:state[s].m+1,last:0};
+  msg(`별 ${s}의 빛을 모으는 중…`);
+}
+function stepScope(t){
+  if(slew){const p=Math.min(1,(t-slew.t0)/slew.dur),e=p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+    aim.x=slew.from.x+(slew.to.x-slew.from.x)*e;aim.y=slew.from.y+(slew.to.y-slew.from.y)*e;
+    if(p>=1){slew=null;}}
+  if(!meas&&!slew&&!(sdrag&&sdrag.moved)){const s=inAperture();if(s&&rec[s]==null)startMeasure();}
+  if(meas){
+    if(inAperture()!==meas.s){meas=null;msg('별이 조준 원을 벗어났어요. 다시 조준해 주세요.');return;}
+    const p=Math.min(1,(t-meas.t0)/meas.dur);
+    if(t-meas.last>110){meas.last=t;meas.read=state[meas.s].m+(Math.random()-.5)*1.6*Math.pow(1-p,1.4);}
+    meas.p=p;
+    if(p>=1){const s=meas.s;rec[s]=state[s].m;lastDone={s,t};meas=null;renderRec();
+      msg(`측정 완료! 별 ${s}의 겉보기 등급은 <b>${f1(state[s].m)} 등급</b>이에요.`);}
+  }
+}
+function drawScope(t=performance.now()){
+  if(!SW)return;const R=SW/2,k=SW/320,ts=t*0.001;
+  const ox=reduce?0:Math.sin(ts*.35)*1.6*k, oy=reduce?0:Math.cos(ts*.27)*1.2*k;   // 대기 흔들림
+  const toX=fx=>(fx-aim.x)*SW+R+ox, toY=fy=>(fy-aim.y)*SW+R+oy;
+  sx.clearRect(0,0,SW,SW);
+  sx.save();sx.beginPath();sx.arc(R,R,R-9*k,0,7);sx.clip();
+  const bg=sx.createRadialGradient(R*.9,R*.85,R*.05,R,R,R);bg.addColorStop(0,'#0e1836');bg.addColorStop(.7,'#060b1c');bg.addColorStop(1,'#02040a');
+  sx.fillStyle=bg;sx.fillRect(0,0,SW,SW);
+  for(const b of scopeBg){const x=toX(b.x),y=toY(b.y);if(x<-4||y<-4||x>SW+4||y>SW+4)continue;
+    const tw=reduce?1:.7+.3*Math.sin(ts*b.f+b.p);
+    sx.fillStyle=`rgba(220,230,255,${b.a*tw})`;sx.beginPath();sx.arc(x,y,b.r*k*.6,0,7);sx.fill();}
+  const P={};
+  for(const s of SLOTS){
+    const x=toX(SPOS[s][0]),y=toY(SPOS[s][1]),m=state[s].m,[Rr,G,B]=STARCOL[s];
+    const b=Math.max(.06,Math.min(1,(8-m)/11));
+    const [a1,a2,p]=TW[s],tw=reduce?1:1+.07*Math.sin(ts*a1+p)+.04*Math.sin(ts*a2+p*1.7);
+    const r=(7+36*b)*k*tw;P[s]={x,y,r};
+    if(x<-r||y<-r||x>SW+r||y>SW+r)continue;
+    const g=sx.createRadialGradient(x,y,0,x,y,r);
+    g.addColorStop(0,`rgba(255,255,255,${.95*Math.min(1,.5+b)})`);g.addColorStop(.12,`rgba(${Rr},${G},${B},${.85*Math.min(1,.4+b)})`);
+    g.addColorStop(.4,`rgba(${Rr},${G},${B},${.22*b+.05})`);g.addColorStop(1,`rgba(${Rr},${G},${B},0)`);
+    sx.fillStyle=g;sx.beginPath();sx.arc(x,y,r,0,7);sx.fill();
+    if(b>.3){const L=(12+70*(b-.3))*k*tw;sx.lineWidth=Math.max(.8,1.1*k);
+      for(const [dx,dy] of [[1,0],[0,1]]){const lg=sx.createLinearGradient(x-dx*L,y-dy*L,x+dx*L,y+dy*L);
+        lg.addColorStop(0,`rgba(${Rr},${G},${B},0)`);lg.addColorStop(.5,`rgba(255,255,255,${.55*b})`);lg.addColorStop(1,`rgba(${Rr},${G},${B},0)`);
+        sx.strokeStyle=lg;sx.beginPath();sx.moveTo(x-dx*L,y-dy*L);sx.lineTo(x+dx*L,y+dy*L);sx.stroke();}}
+    sx.fillStyle='#fff';sx.beginPath();sx.arc(x,y,(1.2+2.4*b)*k,0,7);sx.fill();
+  }
+  // 별 이름표 (측정한 별은 등급까지)
+  const fs=Math.round(11.5*k);
+  for(const s of SLOTS){const {x,y,r}=P[s];
+    const txt=rec[s]!=null?`${s}  ${f1(rec[s])}`:s;
+    sx.font=`700 ${fs}px "IBM Plex Mono",monospace`;const w=sx.measureText(txt).width+12*k,h=fs+8*k;
+    const off=Math.max(10*k,r*.3)+6*k,lx=x>R?x-off-w:x+off,ly=y-r*.3-h-2*k;
+    sx.fillStyle='rgba(6,10,24,.7)';rr(lx,ly,w,h,h/2);sx.fill();
+    sx.strokeStyle=TAGCOL[s];sx.globalAlpha=.6;sx.lineWidth=1;sx.stroke();sx.globalAlpha=1;
+    sx.textBaseline='middle';sx.textAlign='left';sx.fillStyle=TAGCOL[s];sx.fillText(txt,lx+6*k,ly+h/2+.5);sx.textBaseline='alphabetic';}
+  // 조준 원과 눈금
+  const target=inAperture(),ap=AP*SW;
+  const ringCol=meas?'#f5cd6a':target?'#5fd39a':'rgba(200,215,255,.55)';
+  sx.strokeStyle=ringCol;sx.lineWidth=1.5;sx.beginPath();sx.arc(R,R,ap,0,7);sx.stroke();
+  sx.lineWidth=1;sx.strokeStyle='rgba(200,215,255,.35)';sx.beginPath();
+  for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){sx.moveTo(R+dx*(ap+6*k),R+dy*(ap+6*k));sx.lineTo(R+dx*(ap+26*k),R+dy*(ap+26*k));}
+  sx.stroke();
+  if(meas){sx.strokeStyle='#f5cd6a';sx.lineWidth=3*k;sx.beginPath();sx.arc(R,R,ap+4*k,-Math.PI/2,-Math.PI/2+meas.p*Math.PI*2);sx.stroke();}
+  const vg=sx.createRadialGradient(R,R,R*.62,R,R,R);vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,.75)');
+  sx.fillStyle=vg;sx.fillRect(0,0,SW,SW);
+  // 측광 판독 표시
+  let hud=null;
+  if(meas)hud={t1:`측광 중 · 별 ${meas.s}`,t2:f1(meas.read),c:'#f5cd6a'};
+  else if(lastDone&&t-lastDone.t<4000)hud={t1:`측정 완료 · 별 ${lastDone.s}`,t2:f1(rec[lastDone.s])+' 등급',c:'#5fd39a'};
+  else if(target)hud={t1:`조준됨 · 별 ${target}`,t2:rec[target]!=null?f1(rec[target])+' 등급':'측광 대기',c:'#5fd39a'};
+  if(hud){sx.textAlign='center';sx.font=`500 ${Math.round(11*k)}px "Noto Sans KR",sans-serif`;
+    const w=118*k,h=40*k,x0=R-w/2,y0=SW-70*k;
+    sx.fillStyle='rgba(4,8,20,.78)';rr(x0,y0,w,h,8*k);sx.fill();
+    sx.fillStyle='rgba(210,222,255,.8)';sx.fillText(hud.t1,R,y0+14*k);
+    sx.font=`700 ${Math.round(15*k)}px "IBM Plex Mono",monospace`;sx.fillStyle=hud.c;sx.fillText(hud.t2,R,y0+32*k);}
+  sx.restore();
+  const ring=sx.createLinearGradient(0,0,SW,SW);ring.addColorStop(0,'#4b5677');ring.addColorStop(.5,'#1a2033');ring.addColorStop(1,'#3a4462');
+  sx.strokeStyle=ring;sx.lineWidth=12*k;sx.beginPath();sx.arc(R,R,R-6*k,0,7);sx.stroke();
+  sx.strokeStyle='rgba(160,180,230,.35)';sx.lineWidth=1;sx.beginPath();sx.arc(R,R,R-12*k,0,7);sx.stroke();
+}
+function resizeScope(){
+  const r=sc.getBoundingClientRect(),dpr=Math.min(2,devicePixelRatio||1);
+  SW=r.width;sc.width=SW*dpr;sc.height=SW*dpr;sx.setTransform(dpr,0,0,dpr,0,0);drawScope();
+}
+new ResizeObserver(resizeScope).observe(sc);
+/* 시야 조작: 끌면 망원경 이동, 별을 누르면 그 별로 이동 */
+let sdrag=null;
+sc.addEventListener('pointerdown',e=>{const r=sc.getBoundingClientRect();
+  sdrag={x:e.clientX,y:e.clientY,ax:aim.x,ay:aim.y,moved:false,lx:e.clientX-r.left,ly:e.clientY-r.top};sc.setPointerCapture(e.pointerId);});
+sc.addEventListener('pointermove',e=>{if(!sdrag)return;const dx=e.clientX-sdrag.x,dy=e.clientY-sdrag.y;
+  if(!sdrag.moved&&Math.hypot(dx,dy)>6){sdrag.moved=true;slew=null;}
+  if(sdrag.moved){aim.x=sdrag.ax-dx/SW;aim.y=sdrag.ay-dy/SW;clampAim();}});
+sc.addEventListener('pointerup',()=>{if(!sdrag)return;
+  if(!sdrag.moved){const R=SW/2;let best=null,bd=40*SW/320;
+    for(const s of SLOTS){const x=(SPOS[s][0]-aim.x)*SW+R,y=(SPOS[s][1]-aim.y)*SW+R,d=Math.hypot(x-sdrag.lx,y-sdrag.ly);if(d<bd){bd=d;best=s;}}
+    if(best)slewTo(best);}
+  sdrag=null;});
+sc.addEventListener('pointercancel',()=>sdrag=null);
+let scopeVis=true,scopeRaf=0;
+function scopeTick(t){stepScope(t);drawScope(t);scopeRaf=(scopeVis&&!document.hidden)?requestAnimationFrame(scopeTick):0;}
+function scopeStart(){if(!scopeRaf)scopeRaf=requestAnimationFrame(scopeTick);}
+new IntersectionObserver(es=>{scopeVis=es[0].isIntersecting;if(scopeVis)scopeStart();}).observe(sc);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)scopeStart();});
+scopeStart();
+
+setStars(DEFAULT);fillTable();update();
+</script>
+</body>
+</html>
