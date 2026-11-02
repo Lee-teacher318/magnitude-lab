@@ -89,7 +89,7 @@ td.now{color:var(--ok)}
   </section>
 
   <div class="sky"><canvas id="sky" aria-label="지구와 세 별이 있는 밤하늘. 별을 끌어 거리를 바꿀 수 있음"></canvas></div>
-  <p class="hint">별 아래에는 지금 위치에서의 등급과 거리가 표시됩니다. 등급이 망원경으로 측정한 겉보기 등급과 같아지면 초록색으로 바뀌어요. 그때의 거리가 별의 실제 거리입니다.</p>
+  <p class="hint">별 아래에는 지금 위치에서의 등급이 표시됩니다. 등급이 망원경으로 측정한 겉보기 등급과 같아지면 초록색으로 바뀌어요. 그때 별의 거리를 거리축 눈금에서 읽어 보세요.</p>
 
   <div class="controls">
     <button class="primary" id="btnTen">세 별을 10 pc로 되돌리기</button>
@@ -265,8 +265,6 @@ function draw(){
     const match=Math.abs(now-st.m)<=TOL_MAG;
     label('별 '+s,lx,y-24,'700 15px "Noto Sans KR",sans-serif',TAGCOL[s]);
     label((match?'✓ ':'')+'지금 '+f1(now)+' 등급',lx,y+34,'700 13px "IBM Plex Mono",monospace',match?'#5fd39a':TAGCOL[s]);
-    const dNow=Math.pow(10,st.logd);
-    label('거리 '+(dNow<10?dNow.toFixed(1):Math.round(dNow))+' pc',lx,y+52,'500 12px "IBM Plex Mono",monospace','#d6e0ff');
   }
 }
 
